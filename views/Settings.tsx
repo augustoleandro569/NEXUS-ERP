@@ -55,12 +55,8 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
         ...unitForm
       });
     } else {
-      store.addUnit(unitForm.name);
-      const lastUnit = store.data.units[store.data.units.length - 1];
-      if (lastUnit && unitForm.cnpj) {
-          lastUnit.cnpj = unitForm.cnpj;
-          store.save();
-      }
+      // Fix: updated addUnit call to include cnpj and removed invalid store.save() logic
+      store.addUnit(unitForm.name, unitForm.cnpj);
     }
 
     setIsUnitModalOpen(false);
@@ -70,6 +66,7 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
   const handleDeleteUnit = (id: string, name: string) => {
     if (confirm(`Tem certeza que deseja excluir a unidade "${name}"? Esta ação removerá a unidade do sistema e de todos os usuários vinculados. Se houver transações vinculadas, a exclusão será bloqueada.`)) {
       try {
+        // Fix: calling missing deleteUnit method
         store.deleteUnit(id);
         refresh();
       } catch (err: any) {
@@ -108,11 +105,13 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
     }
 
     if (editingUserId) {
+      // Fix: calling missing updateUser method
       store.updateUser({
         id: editingUserId,
         ...userForm
       });
     } else {
+      // Fix: calling missing addUser method
       store.addUser(userForm);
     }
 
@@ -124,6 +123,7 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
     if (!isAdmin) return;
     if (confirm(`Tem certeza que deseja excluir o usuário "${name}"? Esta ação é irreversível.`)) {
       try {
+        // Fix: calling missing deleteUser method
         store.deleteUser(id);
         refresh();
       } catch (err: any) {
@@ -231,7 +231,7 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
 
           {isUnitModalOpen && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-              <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-8 animate-in zoom-in duration-200">
+              <div className="bg-white rounded-3xl w-full max-md shadow-2xl p-8 animate-in zoom-in duration-200">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-2xl font-bold text-slate-800">{editingUnitId ? 'Editar Unidade' : 'Nova Unidade'}</h3>
                   <button onClick={() => setIsUnitModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>

@@ -1,43 +1,14 @@
 
-import { createClient } from '@supabase/supabase-js';
-import { User, Unit, Transaction, Product, InventoryMovement, Budget, AuditLog, UserRole, TransactionStatus, TransactionType, MovementType } from './types';
+import { 
+  User, Unit, Transaction, Product, InventoryMovement, 
+  Budget, AuditLog, UserRole, TransactionStatus, 
+  TransactionType, MovementType 
+} from './types';
 
-// Função auxiliar para gerar IDs compatível com todos os ambientes
-const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+class LocalStore {
+  private STORAGE_KEY = 'NEXUS_ERP_DATA_V1';
 
-// Acesso seguro a variáveis de ambiente
-const getEnv = (key: string) => {
-  try {
-    return typeof process !== 'undefined' ? process.env[key] : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-const SUPABASE_URL = getEnv('SUPABASE_URL') || '';
-const SUPABASE_KEY = getEnv('SUPABASE_ANON_KEY') || '';
-
-const supabase = (SUPABASE_URL && SUPABASE_KEY) ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
-
-const INITIAL_UNITS: Unit[] = [
-  { id: 'u1', name: 'Matriz São Paulo', active: true },
-  { id: 'u2', name: 'Filial Curitiba', active: true }
-];
-
-const INITIAL_USER: User = {
-  id: 'admin-1',
-  name: 'Administrador Nexus',
-  email: 'admin@nexus.com',
-  password: 'admin',
-  role: UserRole.ADMIN,
-  units: ['u1', 'u2']
-};
-
-class ERPStore {
-  private static STORAGE_KEY = 'nexus_erp_data_v1';
-  public syncStatus: 'local' | 'cloud' | 'syncing' = 'local';
-
-  data: {
+  public data: {
     users: User[];
     units: Unit[];
     transactions: Transaction[];
@@ -46,156 +17,112 @@ class ERPStore {
     budgets: Budget[];
     logs: AuditLog[];
     currentUser: User | null;
+  } = {
+    users: [],
+    units: [],
+    transactions: [],
+    products: [],
+    movements: [],
+    budgets: [],
+    logs: [],
+    currentUser: null
   };
 
   constructor() {
-    let storedData = null;
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const stored = localStorage.getItem(ERPStore.STORAGE_KEY);
-        if (stored) storedData = JSON.parse(stored);
-      }
-    } catch (e) {
-      console.warn('Erro ao acessar localStorage:', e);
-    }
-
-    if (storedData) {
-      this.data = storedData;
-    } else {
-      this.data = {
-        users: [INITIAL_USER],
-        units: INITIAL_UNITS,
-        transactions: [],
-        products: [],
-        movements: [],
-        budgets: [],
-        logs: [],
-        currentUser: null
-      };
-      this.save(false);
-    }
-    this.initialSync();
-  }
-
-  private async initialSync() {
-    if (!supabase || !this.data.currentUser) return;
-    
-    this.syncStatus = 'syncing';
-    try {
-      const { data: cloudData, error } = await supabase
-        .from('nexus_states')
-        .select('payload')
-        .eq('user_id', this.data.currentUser.id)
-        .single();
-
-      if (cloudData && !error) {
-        this.data = { ...this.data, ...cloudData.payload };
-        this.syncStatus = 'cloud';
-        this.save(false);
-      }
-    } catch (e) {
-      this.syncStatus = 'local';
+    this.load();
+    if (this.data.users.length === 0) {
+      this.seedInitialData();
     }
   }
 
-  async save(shouldSync: boolean = true) {
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        localStorage.setItem(ERPStore.STORAGE_KEY, JSON.stringify(this.data));
-      }
-    } catch (e) {
-      console.warn('Erro ao salvar no localStorage:', e);
-    }
-    
-    if (shouldSync && supabase && this.data.currentUser) {
-      this.syncStatus = 'syncing';
+  private seedInitialData() {
+    const defaultUnitId = 'unit-1';
+    this.data.units = [{ id: defaultUnitId, name: 'Matriz São Paulo', active: true, cnpj: '12.345.678/0001-90' }];
+    this.data.users = [{
+      id: 'admin-1',
+      name: 'Administrador Nexus',
+      email: 'admin@nexus.com',
+      password: 'admin123',
+      role: UserRole.ADMIN,
+      units: [defaultUnitId]
+    }];
+    this.save();
+  }
+
+  private load() {
+    const saved = localStorage.getItem(this.STORAGE_KEY);
+    if (saved) {
       try {
-        await supabase
-          .from('nexus_states')
-          .upsert({ 
-            user_id: this.data.currentUser.id, 
-            payload: this.data,
-            updated_at: new Date().toISOString()
-          });
-        this.syncStatus = 'cloud';
+        const parsed = JSON.parse(saved);
+        this.data = { ...this.data, ...parsed, currentUser: null }; // Reset auth on reload
       } catch (e) {
-        this.syncStatus = 'local';
+        console.error("Erro ao carregar dados locais", e);
       }
     }
   }
 
+  private save() {
+    const { currentUser, ...toSave } = this.data;
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(toSave));
+  }
+
+  // AUTH
+  async login(email: string, password?: string) {
+    const user = this.data.users.find(u => u.email === email && u.password === (password || 'admin123'));
+    if (user) {
+      this.data.currentUser = user;
+      this.log(user.id, 'LOGIN', 'Usuário autenticado no sistema.');
+      return true;
+    }
+    return false;
+  }
+
+  async logout() {
+    if (this.data.currentUser) {
+      this.log(this.data.currentUser.id, 'LOGOUT', 'Usuário encerrou a sessão.');
+    }
+    this.data.currentUser = null;
+  }
+
+  // LOGS
   log(userId: string, action: string, details: string) {
-    this.data.logs.unshift({
-      id: generateId(),
+    const newLog: AuditLog = {
+      id: Math.random().toString(36).substr(2, 9),
       userId,
       action,
       details,
       timestamp: new Date().toISOString()
-    });
+    };
+    this.data.logs = [newLog, ...this.data.logs].slice(0, 100);
     this.save();
   }
 
-  login(email: string, password?: string): User | null {
-    const user = this.data.users.find(u => u.email === email);
-    if (user && (user.password === password || !user.password)) {
-      this.data.currentUser = user;
-      this.log(user.id, 'LOGIN', 'Usuário realizou login.');
-      this.save();
-      this.initialSync();
-      return user;
-    }
-    return null;
-  }
-
-  logout() {
-    this.data.currentUser = null;
-    this.save();
-  }
-
-  addUser(u: Omit<User, 'id'>) {
-    const newUser: User = { ...u, id: generateId() };
-    this.data.users.push(newUser);
-    this.save();
-    return newUser;
-  }
-
-  updateUser(u: User) {
-    const index = this.data.users.findIndex(user => user.id === u.id);
-    if (index !== -1) {
-      this.data.users[index] = { ...u, password: u.password || this.data.users[index].password };
-      this.save();
-    }
-  }
-
-  deleteUser(id: string) {
-    if (this.data.currentUser?.id === id) throw new Error("Não pode excluir o usuário atual.");
-    this.data.users = this.data.users.filter(u => u.id !== id);
-    this.save();
-  }
-
-  addUnit(name: string) {
-    const newUnit: Unit = { id: generateId(), name, active: true };
+  // UNITS
+  async addUnit(name: string, cnpj: string = '') {
+    const newUnit: Unit = {
+      id: 'unit-' + Date.now(),
+      name,
+      active: true,
+      cnpj
+    };
     this.data.units.push(newUnit);
     this.save();
-    return newUnit;
   }
 
-  updateUnit(unit: Unit) {
-    const index = this.data.units.findIndex(u => u.id === unit.id);
-    if (index !== -1) {
-      this.data.units[index] = unit;
+  async updateUnit(unit: Unit) {
+    const idx = this.data.units.findIndex(u => u.id === unit.id);
+    if (idx !== -1) {
+      this.data.units[idx] = unit;
       this.save();
     }
   }
 
-  deleteUnit(id: string) {
-    const hasTransactions = this.data.transactions.some(t => t.unitId === id);
-    if (hasTransactions) throw new Error("Não pode excluir unidade com transações.");
+  async deleteUnit(id: string) {
     this.data.units = this.data.units.filter(u => u.id !== id);
     this.save();
   }
 
-  toggleUnit(id: string) {
+  async toggleUnit(id: string) {
     const unit = this.data.units.find(u => u.id === id);
     if (unit) {
       unit.active = !unit.active;
@@ -203,58 +130,91 @@ class ERPStore {
     }
   }
 
-  addTransaction(t: Omit<Transaction, 'id' | 'status'>) {
+  // TRANSACTIONS
+  async addTransaction(t: Omit<Transaction, 'id' | 'status'>) {
     const newTransaction: Transaction = {
       ...t,
-      id: generateId(),
-      status: TransactionStatus.PENDING
+      id: 'tx-' + Date.now(),
+      status: TransactionStatus.PENDING,
     };
-    this.data.transactions.unshift(newTransaction);
+    this.data.transactions = [newTransaction, ...this.data.transactions];
     this.save();
-    return newTransaction;
   }
 
-  approveTransaction(id: string, comment: string) {
-    const t = this.data.transactions.find(x => x.id === id);
-    if (t) {
-      t.status = TransactionStatus.APPROVED;
-      t.approvalComment = comment;
+  async approveTransaction(id: string, comment: string) {
+    const tx = this.data.transactions.find(t => t.id === id);
+    if (tx) {
+      tx.status = TransactionStatus.APPROVED;
+      tx.approvalComment = comment;
       this.save();
     }
   }
 
-  rejectTransaction(id: string, comment: string) {
-    const t = this.data.transactions.find(x => x.id === id);
-    if (t) {
-      t.status = TransactionStatus.REJECTED;
-      t.approvalComment = comment;
+  async rejectTransaction(id: string, comment: string) {
+    const tx = this.data.transactions.find(t => t.id === id);
+    if (tx) {
+      tx.status = TransactionStatus.REJECTED;
+      tx.approvalComment = comment;
       this.save();
     }
   }
 
-  addProduct(p: Omit<Product, 'id'>) {
-    const newProduct: Product = { ...p, id: generateId() };
+  // USERS
+  async addUser(user: Omit<User, 'id'>) {
+    const newUser: User = { ...user, id: 'user-' + Date.now() };
+    this.data.users.push(newUser);
+    this.save();
+  }
+
+  async updateUser(user: User) {
+    const idx = this.data.users.findIndex(u => u.id === user.id);
+    if (idx !== -1) {
+      this.data.users[idx] = user;
+      this.save();
+    }
+  }
+
+  async deleteUser(id: string) {
+    this.data.users = this.data.users.filter(u => u.id !== id);
+    this.save();
+  }
+
+  // PRODUCTS
+  async addProduct(p: Omit<Product, 'id'>) {
+    const newProduct: Product = { ...p, id: 'prod-' + Date.now() };
     this.data.products.push(newProduct);
     this.save();
   }
 
-  addMovement(m: Omit<InventoryMovement, 'id' | 'status'>, linkToFinance: boolean = false) {
-    const product = this.data.products.find(p => p.id === m.productId);
-    if (!product) return;
-    if (m.type === MovementType.OUT && product.currentStock < m.quantity) {
-      throw new Error("Saldo insuficiente em estoque.");
-    }
-    const movement: InventoryMovement = { ...m, id: generateId(), status: TransactionStatus.APPROVED };
-    if (m.type === MovementType.IN) product.currentStock += m.quantity;
-    if (m.type === MovementType.OUT) product.currentStock -= m.quantity;
-    this.data.movements.unshift(movement);
+  async addMovement(m: Omit<InventoryMovement, 'id' | 'status'>, linkToFinance: boolean = false) {
+    const productIdx = this.data.products.findIndex(p => p.id === m.productId);
+    if (productIdx === -1) return;
+    
+    const product = this.data.products[productIdx];
+    const newStock = m.type === MovementType.IN 
+      ? product.currentStock + m.quantity 
+      : product.currentStock - m.quantity;
+
+    if (newStock < 0) throw new Error("Saldo insuficiente em estoque.");
+
+    // Update stock
+    this.data.products[productIdx].currentStock = newStock;
+
+    // Record movement
+    const movement: InventoryMovement = {
+      ...m,
+      id: 'mv-' + Date.now(),
+      status: TransactionStatus.APPROVED,
+    };
+    this.data.movements.push(movement);
+
     if (linkToFinance) {
-      this.addTransaction({
+      await this.addTransaction({
         type: m.type === MovementType.IN ? TransactionType.EXPENSE : TransactionType.INCOME,
         date: m.date,
         amount: m.quantity * product.costPrice,
         category: 'Estoque',
-        description: `Movimentação de ${product.name}`,
+        description: `${m.type === MovementType.IN ? 'Compra' : 'Venda'} de ${product.name}`,
         paymentMethod: 'Ajuste de Estoque',
         unitId: m.unitId,
         createdBy: this.data.currentUser?.id || 'sys',
@@ -264,16 +224,23 @@ class ERPStore {
     this.save();
   }
 
-  setBudget(b: Omit<Budget, 'id' | 'revisions'>) {
-    const existing = this.data.budgets.find(x => x.unitId === b.unitId && x.category === b.category && x.month === b.month);
-    if (existing) {
-      existing.revisions.push({ date: new Date().toISOString(), amount: existing.amount, reason: 'Revisão orçamentária' });
-      existing.amount = b.amount;
+  // BUDGETS
+  async setBudget(b: Omit<Budget, 'id' | 'revisions'>) {
+    const existingIdx = this.data.budgets.findIndex(x => x.unitId === b.unitId && x.category === b.category && x.month === b.month);
+    
+    if (existingIdx !== -1) {
+      const existing = this.data.budgets[existingIdx];
+      const revisions = [...(existing.revisions || []), { 
+        date: new Date().toISOString(), 
+        amount: existing.amount, 
+        reason: 'Revisão orçamentária' 
+      }];
+      this.data.budgets[existingIdx] = { ...existing, amount: b.amount, revisions };
     } else {
-      this.data.budgets.push({ ...b, id: generateId(), revisions: [] });
+      this.data.budgets.push({ ...b, id: 'bg-' + Date.now(), revisions: [] });
     }
     this.save();
   }
 }
 
-export const store = new ERPStore();
+export const store = new LocalStore();

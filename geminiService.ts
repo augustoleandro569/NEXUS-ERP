@@ -2,15 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction } from "./types";
 
-const getApiKey = () => {
-  try {
-    return typeof process !== 'undefined' ? process.env.API_KEY : '';
-  } catch {
-    return '';
-  }
-};
-
-const ai = new GoogleGenAI({ apiKey: getApiKey() || '' });
+// Always use named parameter for apiKey and obtain it directly from process.env.API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export async function getFinancialForecast(transactions: Transaction[]) {
   const summary = transactions.map(t => ({
