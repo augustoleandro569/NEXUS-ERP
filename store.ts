@@ -1,13 +1,47 @@
 
+import { initializeApp } from "firebase/app";
+import { 
+  getFirestore, 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  query, 
+  where, 
+  orderBy, 
+  Timestamp,
+  setDoc,
+  getDoc
+} from "firebase/firestore";
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
+} from "firebase/auth";
 import { 
   User, Unit, Transaction, Product, InventoryMovement, 
   Budget, AuditLog, UserRole, TransactionStatus, 
   TransactionType, MovementType 
 } from './types';
 
-class LocalStore {
-  private STORAGE_KEY = 'NEXUS_ERP_DATA_V1';
+const firebaseConfig = {
+  apiKey: "AIzaSyDA-6MvzgCE9-iRSsmPe0uStN1CjghFnLs",
+  authDomain: "nexus-erp-56e2f.firebaseapp.com",
+  projectId: "nexus-erp-56e2f",
+  storageBucket: "nexus-erp-56e2f.firebasestorage.app",
+  messagingSenderId: "706383612948",
+  appId: "1:706383612948:web:b1c6a196a2c1cf5acd2b01",
+  measurementId: "G-RLG81K4M3P"
+};
 
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+class FirebaseStore {
   public data: {
     users: User[];
     units: Unit[];
@@ -29,184 +63,172 @@ class LocalStore {
   };
 
   constructor() {
-    this.load();
-    if (this.data.users.length === 0) {
-      this.seedInitialData();
-    }
+    this.initListeners();
   }
 
-  private seedInitialData() {
-    const defaultUnitId = 'unit-1';
-    this.data.units = [{ id: defaultUnitId, name: 'Matriz São Paulo', active: true, cnpj: '12.345.678/0001-90' }];
-    this.data.users = [{
-      id: 'admin-1',
-      name: 'Administrador Nexus',
-      email: 'admin@nexus.com',
-      password: 'admin123',
-      role: UserRole.ADMIN,
-      units: [defaultUnitId]
-    }];
-    this.save();
-  }
-
-  private load() {
-    const saved = localStorage.getItem(this.STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        this.data = { ...this.data, ...parsed, currentUser: null }; // Reset auth on reload
-      } catch (e) {
-        console.error("Erro ao carregar dados locais", e);
+  private initListeners() {
+    // Escutar mudanças na autenticação
+    onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
+        if (userDoc.exists()) {
+          this.data.currentUser = { id: fbUser.uid, ...userDoc.data() } as User;
+        }
+      } else {
+        this.data.currentUser = null;
       }
-    }
-  }
+    });
 
-  private save() {
-    const { currentUser, ...toSave } = this.data;
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(toSave));
+    // Escutar coleções em tempo real
+    onSnapshot(collection(db, 'units'), (s) => {
+      this.data.units = s.docs.map(d => ({ id: d.id, ...d.data() } as Unit));
+    });
+
+    onSnapshot(query(collection(db, 'transactions'), orderBy('date', 'desc')), (s) => {
+      this.data.transactions = s.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
+    });
+
+    onSnapshot(collection(db, 'products'), (s) => {
+      this.data.products = s.docs.map(d => ({ id: d.id, ...d.data() } as Product));
+    });
+
+    onSnapshot(collection(db, 'users'), (s) => {
+      this.data.users = s.docs.map(d => ({ id: d.id, ...d.data() } as User));
+    });
+
+    onSnapshot(collection(db, 'budgets'), (s) => {
+      this.data.budgets = s.docs.map(d => ({ id: d.id, ...d.data() } as Budget));
+    });
+
+    onSnapshot(query(collection(db, 'logs'), orderBy('timestamp', 'desc')), (s) => {
+      this.data.logs = s.docs.map(d => ({ id: d.id, ...d.data() } as AuditLog)).slice(0, 50);
+    });
   }
 
   // AUTH
   async login(email: string, password?: string) {
-    const user = this.data.users.find(u => u.email === email && u.password === (password || 'admin123'));
-    if (user) {
-      this.data.currentUser = user;
-      this.log(user.id, 'LOGIN', 'Usuário autenticado no sistema.');
-      return true;
+    try {
+      const res = await signInWithEmailAndPassword(auth, email, password || 'admin123');
+      const userDoc = await getDoc(doc(db, 'users', res.user.uid));
+      if (userDoc.exists()) {
+        this.data.currentUser = { id: res.user.uid, ...userDoc.data() } as User;
+        await this.log(res.user.uid, 'LOGIN', 'Acesso ao sistema via Firebase Auth');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error("Erro no Login:", e);
+      return false;
     }
-    return false;
   }
 
   async logout() {
     if (this.data.currentUser) {
-      this.log(this.data.currentUser.id, 'LOGOUT', 'Usuário encerrou a sessão.');
+      await this.log(this.data.currentUser.id, 'LOGOUT', 'Sessão encerrada');
     }
+    await signOut(auth);
     this.data.currentUser = null;
   }
 
   // LOGS
-  log(userId: string, action: string, details: string) {
-    const newLog: AuditLog = {
-      id: Math.random().toString(36).substr(2, 9),
+  async log(userId: string, action: string, details: string) {
+    await addDoc(collection(db, 'logs'), {
       userId,
       action,
       details,
       timestamp: new Date().toISOString()
-    };
-    this.data.logs = [newLog, ...this.data.logs].slice(0, 100);
-    this.save();
+    });
   }
 
   // UNITS
   async addUnit(name: string, cnpj: string = '') {
-    const newUnit: Unit = {
-      id: 'unit-' + Date.now(),
+    await addDoc(collection(db, 'units'), {
       name,
       active: true,
       cnpj
-    };
-    this.data.units.push(newUnit);
-    this.save();
+    });
   }
 
   async updateUnit(unit: Unit) {
-    const idx = this.data.units.findIndex(u => u.id === unit.id);
-    if (idx !== -1) {
-      this.data.units[idx] = unit;
-      this.save();
-    }
+    const { id, ...rest } = unit;
+    await updateDoc(doc(db, 'units', id), rest);
   }
 
   async deleteUnit(id: string) {
-    this.data.units = this.data.units.filter(u => u.id !== id);
-    this.save();
+    // Verificar se há dependências
+    const hasTransactions = this.data.transactions.some(t => t.unitId === id);
+    if (hasTransactions) throw new Error("Unidade possui movimentações financeiras vinculadas.");
+    await deleteDoc(doc(db, 'units', id));
   }
 
   async toggleUnit(id: string) {
     const unit = this.data.units.find(u => u.id === id);
     if (unit) {
-      unit.active = !unit.active;
-      this.save();
+      await updateDoc(doc(db, 'units', id), { active: !unit.active });
     }
   }
 
   // TRANSACTIONS
   async addTransaction(t: Omit<Transaction, 'id' | 'status'>) {
-    const newTransaction: Transaction = {
+    await addDoc(collection(db, 'transactions'), {
       ...t,
-      id: 'tx-' + Date.now(),
-      status: TransactionStatus.PENDING,
-    };
-    this.data.transactions = [newTransaction, ...this.data.transactions];
-    this.save();
+      status: TransactionStatus.PENDING
+    });
   }
 
   async approveTransaction(id: string, comment: string) {
-    const tx = this.data.transactions.find(t => t.id === id);
-    if (tx) {
-      tx.status = TransactionStatus.APPROVED;
-      tx.approvalComment = comment;
-      this.save();
-    }
+    await updateDoc(doc(db, 'transactions', id), {
+      status: TransactionStatus.APPROVED,
+      approvalComment: comment
+    });
   }
 
   async rejectTransaction(id: string, comment: string) {
-    const tx = this.data.transactions.find(t => t.id === id);
-    if (tx) {
-      tx.status = TransactionStatus.REJECTED;
-      tx.approvalComment = comment;
-      this.save();
-    }
+    await updateDoc(doc(db, 'transactions', id), {
+      status: TransactionStatus.REJECTED,
+      approvalComment: comment
+    });
   }
 
-  // USERS
+  // USERS (Admin)
   async addUser(user: Omit<User, 'id'>) {
-    const newUser: User = { ...user, id: 'user-' + Date.now() };
-    this.data.users.push(newUser);
-    this.save();
+    // Nota: No Firebase real, você usaria Firebase Admin ou criaria o usuário via Auth primeiro.
+    // Para simplificar o MVP, salvamos os dados do perfil na coleção.
+    await addDoc(collection(db, 'users'), user);
   }
 
   async updateUser(user: User) {
-    const idx = this.data.users.findIndex(u => u.id === user.id);
-    if (idx !== -1) {
-      this.data.users[idx] = user;
-      this.save();
-    }
+    const { id, ...rest } = user;
+    await updateDoc(doc(db, 'users', id), rest);
   }
 
   async deleteUser(id: string) {
-    this.data.users = this.data.users.filter(u => u.id !== id);
-    this.save();
+    await deleteDoc(doc(db, 'users', id));
   }
 
-  // PRODUCTS
+  // PRODUCTS & INVENTORY
   async addProduct(p: Omit<Product, 'id'>) {
-    const newProduct: Product = { ...p, id: 'prod-' + Date.now() };
-    this.data.products.push(newProduct);
-    this.save();
+    await addDoc(collection(db, 'products'), p);
   }
 
   async addMovement(m: Omit<InventoryMovement, 'id' | 'status'>, linkToFinance: boolean = false) {
-    const productIdx = this.data.products.findIndex(p => p.id === m.productId);
-    if (productIdx === -1) return;
-    
-    const product = this.data.products[productIdx];
+    const product = this.data.products.find(p => p.id === m.productId);
+    if (!product) return;
+
     const newStock = m.type === MovementType.IN 
       ? product.currentStock + m.quantity 
       : product.currentStock - m.quantity;
 
     if (newStock < 0) throw new Error("Saldo insuficiente em estoque.");
 
-    // Update stock
-    this.data.products[productIdx].currentStock = newStock;
+    // Atualizar estoque do produto
+    await updateDoc(doc(db, 'products', m.productId), { currentStock: newStock });
 
-    // Record movement
-    const movement: InventoryMovement = {
+    // Registrar movimento
+    const moveRes = await addDoc(collection(db, 'movements'), {
       ...m,
-      id: 'mv-' + Date.now(),
-      status: TransactionStatus.APPROVED,
-    };
-    this.data.movements.push(movement);
+      status: TransactionStatus.APPROVED
+    });
 
     if (linkToFinance) {
       await this.addTransaction({
@@ -218,29 +240,26 @@ class LocalStore {
         paymentMethod: 'Ajuste de Estoque',
         unitId: m.unitId,
         createdBy: this.data.currentUser?.id || 'sys',
-        inventoryMovementId: movement.id
+        inventoryMovementId: moveRes.id
       });
     }
-    this.save();
   }
 
   // BUDGETS
   async setBudget(b: Omit<Budget, 'id' | 'revisions'>) {
-    const existingIdx = this.data.budgets.findIndex(x => x.unitId === b.unitId && x.category === b.category && x.month === b.month);
+    const existing = this.data.budgets.find(x => x.unitId === b.unitId && x.category === b.category && x.month === b.month);
     
-    if (existingIdx !== -1) {
-      const existing = this.data.budgets[existingIdx];
+    if (existing) {
       const revisions = [...(existing.revisions || []), { 
         date: new Date().toISOString(), 
         amount: existing.amount, 
         reason: 'Revisão orçamentária' 
       }];
-      this.data.budgets[existingIdx] = { ...existing, amount: b.amount, revisions };
+      await updateDoc(doc(db, 'budgets', existing.id), { amount: b.amount, revisions });
     } else {
-      this.data.budgets.push({ ...b, id: 'bg-' + Date.now(), revisions: [] });
+      await addDoc(collection(db, 'budgets'), { ...b, revisions: [] });
     }
-    this.save();
   }
 }
 
-export const store = new LocalStore();
+export const store = new FirebaseStore();
