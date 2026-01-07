@@ -12,11 +12,10 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   AlertTriangle,
-  History,
   CheckCircle2
 } from 'lucide-react';
 import { store } from '../store';
-import { MovementType, Product, UserRole, TransactionStatus } from '../types';
+import { MovementType, Product, UserRole } from '../types';
 
 const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh }) => {
   const [activeSubTab, setActiveSubTab] = useState<'stock' | 'catalog'>('stock');
@@ -43,13 +42,12 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
     linkToFinance: true
   });
 
-  const isAdmin = data.currentUser.role === UserRole.ADMIN || data.currentUser.role === UserRole.MANAGER;
+  const isAdminOrManager = data.currentUser.role === UserRole.ADMIN || data.currentUser.role === UserRole.MANAGER;
   const isEmployee = data.currentUser.role === UserRole.EMPLOYEE;
   const userUnits = data.units.filter((u: any) => data.currentUser.units.includes(u.id));
 
   const handleAddProduct = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isAdmin) return;
     store.addProduct({ ...productForm });
     setProductForm({
       name: '',
@@ -106,7 +104,6 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Header com Navegação e Busca */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
         <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
           <button 
@@ -136,7 +133,7 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
               className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm w-full focus:ring-2 focus:ring-blue-500 transition-all"
             />
           </div>
-          {activeSubTab === 'catalog' && isAdmin && (
+          {activeSubTab === 'catalog' && isAdminOrManager && (
             <button 
               onClick={() => setIsProductModalOpen(true)}
               className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 font-bold transition-all shadow-md"
@@ -147,9 +144,8 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
         </div>
       </div>
 
-      {(activeSubTab === 'stock' || isEmployee) ? (
+      {activeSubTab === 'stock' ? (
         <div className="space-y-6">
-          {/* Filtro de Unidades */}
           <div className="flex flex-wrap gap-2">
             {userUnits.map((u: any) => (
               <button
@@ -165,7 +161,7 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
           <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-widest">
                   <tr>
                     <th className="px-6 py-4">Produto</th>
                     <th className="px-6 py-4 text-center">Saldo Atual</th>
@@ -193,7 +189,7 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
                         </div>
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`text-xl font-black ${p.currentStock <= p.minStock ? 'text-red-500' : 'text-slate-900'}`}>
+                        <span className={`text-xl font-bold ${p.currentStock <= p.minStock ? 'text-red-500' : 'text-slate-900'}`}>
                           {p.currentStock}
                         </span>
                       </td>
@@ -201,11 +197,11 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center">
                           {p.currentStock <= p.minStock ? (
-                            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-red-50 text-red-600 border border-red-100">
+                            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-red-50 text-red-600 border border-red-100">
                               <AlertTriangle size={12} /> Estoque Baixo
                             </span>
                           ) : (
-                            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-green-50 text-green-600 border border-green-100">
+                            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-green-50 text-green-600 border border-green-100">
                               <CheckCircle2 size={12} /> Disponível
                             </span>
                           )}
@@ -221,34 +217,21 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
                       </td>
                     </tr>
                   ))}
-                  {filteredProducts.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-24 text-center">
-                        <div className="flex flex-col items-center justify-center text-slate-300">
-                          <Package size={64} className="mb-4 opacity-20" strokeWidth={1} />
-                          <p className="font-bold">Nenhum produto em estoque nesta unidade.</p>
-                          <p className="text-xs mt-1">Tente trocar de unidade ou cadastrar um produto.</p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
       ) : (
-        /* Aba de Catálogo de Produtos */
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+              <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-widest">
                 <tr>
                   <th className="px-6 py-4">Produto</th>
-                  <th className="px-6 py-4">SKU</th>
-                  <th className="px-6 py-4">Unidade Padrão</th>
-                  <th className="px-6 py-4 text-right">Preço de Custo</th>
-                  {isAdmin && <th className="px-6 py-4 text-center">Controle</th>}
+                  <th className="px-6 py-4 text-center">SKU</th>
+                  <th className="px-6 py-4 text-center">Unidade Padrão</th>
+                  <th className="px-6 py-4 text-right">Custo de Cadastro</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 text-sm">
@@ -262,22 +245,13 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
                         <span className="font-bold text-slate-800">{p.name}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 font-mono text-xs font-bold text-slate-500">{p.sku}</td>
-                    <td className="px-6 py-4">
-                      <span className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold text-slate-600">
-                        {data.units.find((u: any) => u.id === p.unitId)?.name}
-                      </span>
+                    <td className="px-6 py-4 text-center font-mono text-xs font-bold text-slate-500">{p.sku}</td>
+                    <td className="px-6 py-4 text-center text-slate-600 font-medium">
+                      {data.units.find((u: any) => u.id === p.unitId)?.name}
                     </td>
                     <td className="px-6 py-4 text-right font-bold text-slate-700">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.costPrice)}
                     </td>
-                    {isAdmin && (
-                      <td className="px-6 py-4 text-center">
-                         <div className="flex items-center justify-center gap-2">
-                           <span className="text-[10px] font-bold text-slate-400 uppercase">Gestão Ativa</span>
-                         </div>
-                      </td>
-                    )}
                   </tr>
                 ))}
               </tbody>
@@ -286,7 +260,6 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
         </div>
       )}
 
-      {/* Modal de Movimentação */}
       {isMovementModalOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-8 animate-in zoom-in duration-200">
@@ -339,7 +312,7 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
                 <textarea 
                   required
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-sm h-24 resize-none"
-                  placeholder="Ex: Compra de mercadoria, venda para cliente, ajuste de quebra..."
+                  placeholder="Ex: Compra de mercadoria, venda para cliente..."
                   value={movementForm.reason}
                   onChange={e => setMovementForm({...movementForm, reason: e.target.value})}
                 />
@@ -353,7 +326,7 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
                   onChange={e => setMovementForm({...movementForm, linkToFinance: e.target.checked})}
                   className="w-5 h-5 rounded-lg border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
-                <label htmlFor="linkFinance" className="text-sm font-bold text-slate-600 cursor-pointer select-none">Vincular ao Financeiro (Lançar Transação)</label>
+                <label htmlFor="linkFinance" className="text-sm font-bold text-slate-600 cursor-pointer select-none">Vincular ao Financeiro</label>
               </div>
 
               <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
@@ -364,8 +337,7 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
         </div>
       )}
 
-      {/* Modal de Cadastro (Admin/Manager Only) */}
-      {isProductModalOpen && isAdmin && (
+      {isProductModalOpen && isAdminOrManager && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl p-8 animate-in zoom-in duration-200">
             <div className="flex justify-between items-center mb-8">

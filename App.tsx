@@ -13,7 +13,9 @@ import {
   Menu,
   Eye,
   EyeOff,
-  Lock
+  Lock,
+  User as UserIcon,
+  Loader2
 } from 'lucide-react';
 import { store } from './store';
 import { User, TransactionStatus, UserRole } from './types';
@@ -33,6 +35,7 @@ const App: React.FC = () => {
   const [loginEmail, setLoginEmail] = useState('admin@nexus.com');
   const [loginPassword, setLoginPassword] = useState('admin');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const refreshData = () => {
     setGlobalData({ ...store.data });
@@ -40,7 +43,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (currentUser) {
-      // Se o usuário for funcionário, redireciona para estoque se estiver em aba proibida
       if (currentUser.role === UserRole.EMPLOYEE && activeTab !== 'inventory') {
         setActiveTab('inventory');
       }
@@ -53,13 +55,30 @@ const App: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const user = store.login(loginEmail, loginPassword);
-    if (user) {
-      setCurrentUser(user);
-      refreshData();
-    } else {
-      alert('E-mail ou senha incorretos!');
-    }
+    setIsLoggingIn(true);
+    
+    setTimeout(() => {
+      const user = store.login(loginEmail, loginPassword);
+      if (user) {
+        setCurrentUser(user);
+        refreshData();
+      } else {
+        alert('E-mail ou senha incorretos!');
+      }
+      setIsLoggingIn(false);
+    }, 800);
+  };
+
+  const quickLogin = (role: UserRole) => {
+    setLoginPassword('admin');
+    if (role === UserRole.ADMIN) setLoginEmail('admin@nexus.com');
+    if (role === UserRole.MANAGER) setLoginEmail('gerente@nexus.com');
+    if (role === UserRole.EMPLOYEE) setLoginEmail('funcionario@nexus.com');
+    
+    setTimeout(() => {
+       const btn = document.getElementById('login-submit-btn');
+       btn?.click();
+    }, 100);
   };
 
   const handleLogout = () => {
@@ -70,63 +89,99 @@ const App: React.FC = () => {
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
-          <div className="text-center mb-8">
-            <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg font-bold text-2xl">
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-10 animate-in fade-in zoom-in duration-500">
+          <div className="text-center mb-10">
+            <div className="bg-blue-600 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 text-white shadow-xl shadow-blue-200 font-black text-3xl transform -rotate-6">
               N
             </div>
-            <h1 className="text-2xl font-bold text-slate-900">Nexus ERP</h1>
-            <p className="text-slate-500 mt-2">Gestão Corporativa Inteligente</p>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Nexus ERP</h1>
+            <p className="text-slate-400 font-medium mt-2">Gestão Corporativa Inteligente</p>
           </div>
-          <form onSubmit={handleLogin} className="space-y-4">
+
+          <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
-              <input 
-                type="email" 
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                placeholder="seu@email.com"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Senha</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">E-mail de Acesso</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                <input 
+                  type="email" 
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium"
+                  placeholder="admin@nexus.com"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Senha</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                 <input 
                   type={showPassword ? "text" : "password"}
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                  placeholder="Sua senha"
+                  className="w-full pl-12 pr-12 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium"
+                  placeholder="••••••••"
                   required
                 />
                 <button 
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 transition-colors"
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
             </div>
+
             <button 
+              id="login-submit-btn"
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg shadow-md transition-colors"
+              disabled={isLoggingIn}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-black py-4 rounded-2xl shadow-xl shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-3"
             >
-              Entrar no Sistema
+              {isLoggingIn ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  Entrando...
+                </>
+              ) : (
+                'Entrar no Nexus'
+              )}
             </button>
           </form>
-          <p className="text-center text-xs text-slate-400 mt-6">
-            Nexus v1.0 • Google AI Studio Powered
+
+          <div className="mt-10">
+            <div className="relative flex items-center mb-6">
+              <div className="flex-grow border-t border-slate-100"></div>
+              <span className="flex-shrink mx-4 text-[10px] font-black text-slate-300 uppercase tracking-widest">Acesso Rápido</span>
+              <div className="flex-grow border-t border-slate-100"></div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3">
+              <button 
+                onClick={() => quickLogin(UserRole.ADMIN)}
+                className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold">A</div>
+                  <span className="text-sm font-bold text-slate-700">Acessar como Administrador</span>
+                </div>
+                <div className="w-2 h-2 rounded-full bg-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              </button>
+            </div>
+          </div>
+
+          <p className="text-center text-[10px] font-bold text-slate-300 mt-10 uppercase tracking-widest">
+            Powered by Google AI Studio
           </p>
         </div>
       </div>
     );
   }
 
-  // Definição de itens de menu baseada em permissão
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.MANAGER] },
     { id: 'finance', label: 'Financeiro', icon: Wallet, roles: [UserRole.ADMIN, UserRole.MANAGER] },
@@ -151,34 +206,33 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white transition-transform duration-300 lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 text-white transition-transform duration-300 lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full shadow-2xl'}`}>
+        <div className="p-8 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-600 p-2.5 rounded-xl shadow-lg shadow-blue-900/20 transform -rotate-6">
               <Wallet size={20} />
             </div>
             <span className="text-xl font-bold tracking-tight">Nexus ERP</span>
           </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-slate-400">
-            <X size={20} />
+          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-slate-400 hover:text-white">
+            <X size={24} />
           </button>
         </div>
 
-        <nav className="px-4 py-4 space-y-1 overflow-y-auto max-h-[calc(100vh-200px)]">
+        <nav className="px-6 py-4 space-y-1 overflow-y-auto max-h-[calc(100vh-220px)] scrollbar-hide">
           {menuItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => { setActiveTab(item.id); setIsSidebarOpen(window.innerWidth > 1024); }}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${activeTab === item.id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+              onClick={() => { setActiveTab(item.id); if(window.innerWidth < 1024) setIsSidebarOpen(false); }}
+              className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all ${activeTab === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/40' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'}`}
             >
-              <div className="flex items-center gap-3">
-                <item.icon size={20} />
-                <span className="font-medium text-sm">{item.label}</span>
+              <div className="flex items-center gap-4">
+                <item.icon size={20} className={activeTab === item.id ? 'opacity-100' : 'opacity-60'} />
+                <span className="font-bold text-sm tracking-wide">{item.label}</span>
               </div>
               {'badge' in item && item.badge && item.badge > 0 ? (
-                <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold animate-pulse">
                   {item.badge}
                 </span>
               ) : null}
@@ -186,42 +240,48 @@ const App: React.FC = () => {
           ))}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/50 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold uppercase">
+        <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-slate-800 bg-slate-900/80 backdrop-blur-md">
+          <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-800/40 border border-slate-800/50 mb-4 group cursor-default">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 font-bold text-lg border border-blue-500/20 group-hover:bg-blue-600 group-hover:text-white transition-all">
               {currentUser.name.charAt(0)}
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-semibold truncate">{currentUser.name}</p>
-              <p className="text-xs text-slate-400 truncate">{currentUser.role}</p>
+              <p className="text-sm font-bold truncate text-slate-100">{currentUser.name}</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">{currentUser.role}</p>
             </div>
           </div>
           <button 
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-sm font-medium"
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-2xl transition-all text-xs font-bold uppercase tracking-widest border border-transparent hover:border-red-500/20"
           >
-            <LogOut size={18} />
-            Sair
+            <LogOut size={16} />
+            Encerrar Sessão
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden text-slate-600">
-              <Menu size={20} />
+        <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-8 shrink-0 z-10">
+          <div className="flex items-center gap-6">
+            <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden text-slate-600 p-2 hover:bg-slate-100 rounded-xl transition-all">
+              <Menu size={24} />
             </button>
-            <h2 className="text-lg font-bold text-slate-800 capitalize">{activeTab}</h2>
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 capitalize tracking-tight">{activeTab}</h2>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{currentUser.units.length} Unidade(s) sob gestão</p>
+            </div>
           </div>
-          <div className="flex items-center gap-4 text-slate-500 text-sm font-medium">
-            <span className="hidden sm:inline">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+          <div className="flex items-center gap-4 text-slate-400 text-xs font-bold uppercase tracking-widest">
+            <span className="hidden sm:inline bg-slate-50 px-4 py-2 rounded-full border border-slate-100">
+              {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </span>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6">
-          {renderContent()}
+        <main className="flex-1 overflow-y-auto p-8 scroll-smooth">
+          <div className="max-w-[1600px] mx-auto">
+            {renderContent()}
+          </div>
         </main>
       </div>
     </div>
