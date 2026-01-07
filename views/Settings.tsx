@@ -12,6 +12,8 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
+  const isAdmin = data.currentUser.role === UserRole.ADMIN;
+
   const [unitForm, setUnitForm] = useState({
     name: '',
     cnpj: '',
@@ -22,7 +24,8 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
     name: '',
     email: '',
     password: '',
-    role: UserRole.USER,
+    // Fix: Replaced UserRole.USER with UserRole.EMPLOYEE
+    role: UserRole.EMPLOYEE,
     units: [] as string[]
   });
 
@@ -53,7 +56,6 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
       });
     } else {
       store.addUnit(unitForm.name);
-      // O método addUnit atual na store não recebe CNPJ, mas para manter a integridade:
       const lastUnit = store.data.units[store.data.units.length - 1];
       if (lastUnit && unitForm.cnpj) {
           lastUnit.cnpj = unitForm.cnpj;
@@ -78,6 +80,7 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
 
   // User Management
   const openUserModal = (user?: User) => {
+    if (!isAdmin) return;
     setShowPassword(false);
     if (user) {
       setEditingUserId(user.id);
@@ -90,13 +93,15 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
       });
     } else {
       setEditingUserId(null);
-      setUserForm({ name: '', email: '', password: '', role: UserRole.USER, units: [] });
+      // Fix: Replaced UserRole.USER with UserRole.EMPLOYEE
+      setUserForm({ name: '', email: '', password: '', role: UserRole.EMPLOYEE, units: [] });
     }
     setIsUserModalOpen(true);
   };
 
   const handleSaveUser = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
     if (userForm.units.length === 0) {
       alert("Selecione ao menos uma unidade para o usuário.");
       return;
@@ -116,6 +121,7 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
   };
 
   const handleDeleteUser = (id: string, name: string) => {
+    if (!isAdmin) return;
     if (confirm(`Tem certeza que deseja excluir o usuário "${name}"? Esta ação é irreversível.`)) {
       try {
         store.deleteUser(id);
@@ -137,7 +143,6 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
 
   return (
     <div className="space-y-6">
-      {/* Sub-Tabs Navigation */}
       <div className="flex border-b border-slate-200 mb-6 overflow-x-auto">
         <button 
           onClick={() => setActiveSubTab('general')}
@@ -145,18 +150,22 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
         >
           <Building size={18} /> Geral & Unidades
         </button>
-        <button 
-          onClick={() => setActiveSubTab('users')}
-          className={`px-6 py-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeSubTab === 'users' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-        >
-          <Users size={18} /> Gestão de Usuários
-        </button>
-        <button 
-          onClick={() => setActiveSubTab('logs')}
-          className={`px-6 py-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeSubTab === 'logs' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-        >
-          <Activity size={18} /> Logs de Auditoria
-        </button>
+        {isAdmin && (
+          <>
+            <button 
+              onClick={() => setActiveSubTab('users')}
+              className={`px-6 py-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeSubTab === 'users' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            >
+              <Users size={18} /> Gestão de Usuários
+            </button>
+            <button 
+              onClick={() => setActiveSubTab('logs')}
+              className={`px-6 py-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${activeSubTab === 'logs' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            >
+              <Activity size={18} /> Logs de Auditoria
+            </button>
+          </>
+        )}
       </div>
 
       {activeSubTab === 'general' && (
@@ -261,7 +270,7 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
         </div>
       )}
 
-      {activeSubTab === 'users' && (
+      {activeSubTab === 'users' && isAdmin && (
         <div className="space-y-6 animate-in fade-in duration-300">
           <div className="flex justify-between items-center">
             <div>
@@ -288,7 +297,7 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
                       <p className="text-sm font-bold text-slate-900 truncate">{user.name}</p>
                       <p className="text-xs text-slate-500 flex items-center gap-1 truncate"><Mail size={12} /> {user.email}</p>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${user.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${user.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
                           {user.role}
                         </span>
                       </div>
@@ -383,7 +392,8 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
                         value={userForm.role}
                         onChange={e => setUserForm({...userForm, role: e.target.value as UserRole})}
                       >
-                        <option value={UserRole.USER}>Usuário</option>
+                        <option value={UserRole.EMPLOYEE}>Funcionário</option>
+                        <option value={UserRole.MANAGER}>Gerente</option>
                         <option value={UserRole.ADMIN}>Administrador</option>
                       </select>
                     </div>
@@ -417,7 +427,7 @@ const Settings: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh 
         </div>
       )}
 
-      {activeSubTab === 'logs' && (
+      {activeSubTab === 'logs' && isAdmin && (
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm animate-in fade-in duration-300">
           <div className="flex items-center gap-2 mb-6">
             <Activity className="text-slate-400" size={20} />

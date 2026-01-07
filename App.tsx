@@ -16,7 +16,7 @@ import {
   Lock
 } from 'lucide-react';
 import { store } from './store';
-import { User, TransactionStatus } from './types';
+import { User, TransactionStatus, UserRole } from './types';
 import Dashboard from './views/Dashboard';
 import Finance from './views/Finance';
 import Inventory from './views/Inventory';
@@ -37,6 +37,15 @@ const App: React.FC = () => {
   const refreshData = () => {
     setGlobalData({ ...store.data });
   };
+
+  useEffect(() => {
+    if (currentUser) {
+      // Se o usuário for funcionário, redireciona para estoque se estiver em aba proibida
+      if (currentUser.role === UserRole.EMPLOYEE && activeTab !== 'inventory') {
+        setActiveTab('inventory');
+      }
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     refreshData();
@@ -117,15 +126,16 @@ const App: React.FC = () => {
     );
   }
 
+  // Definição de itens de menu baseada em permissão
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'finance', label: 'Financeiro', icon: Wallet },
-    { id: 'inventory', label: 'Estoque', icon: Package },
-    { id: 'reports', label: 'Relatórios & DRE', icon: BarChart3 },
-    { id: 'budgeting', label: 'Orçamentos', icon: Target },
-    { id: 'approvals', label: 'Aprovações', icon: CheckCircle2, badge: globalData.transactions.filter(t => t.status === TransactionStatus.PENDING).length },
-    { id: 'settings', label: 'Configurações', icon: Settings },
-  ];
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.MANAGER] },
+    { id: 'finance', label: 'Financeiro', icon: Wallet, roles: [UserRole.ADMIN, UserRole.MANAGER] },
+    { id: 'inventory', label: 'Estoque', icon: Package, roles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.EMPLOYEE] },
+    { id: 'reports', label: 'Relatórios & DRE', icon: BarChart3, roles: [UserRole.ADMIN, UserRole.MANAGER] },
+    { id: 'budgeting', label: 'Orçamentos', icon: Target, roles: [UserRole.ADMIN, UserRole.MANAGER] },
+    { id: 'approvals', label: 'Aprovações', icon: CheckCircle2, roles: [UserRole.ADMIN, UserRole.MANAGER], badge: globalData.transactions.filter(t => t.status === TransactionStatus.PENDING).length },
+    { id: 'settings', label: 'Configurações', icon: Settings, roles: [UserRole.ADMIN, UserRole.MANAGER] },
+  ].filter(item => item.roles.includes(currentUser.role));
 
   const renderContent = () => {
     switch (activeTab) {
@@ -136,7 +146,7 @@ const App: React.FC = () => {
       case 'budgeting': return <Budgeting data={globalData} refresh={refreshData} />;
       case 'approvals': return <Approvals data={globalData} refresh={refreshData} />;
       case 'settings': return <SettingsView data={globalData} refresh={refreshData} />;
-      default: return <Dashboard data={globalData} refresh={refreshData} />;
+      default: return <Inventory data={globalData} refresh={refreshData} />;
     }
   };
 
@@ -167,7 +177,7 @@ const App: React.FC = () => {
                 <item.icon size={20} />
                 <span className="font-medium text-sm">{item.label}</span>
               </div>
-              {item.badge && item.badge > 0 ? (
+              {'badge' in item && item.badge && item.badge > 0 ? (
                 <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
                   {item.badge}
                 </span>

@@ -1,16 +1,17 @@
 
 export enum UserRole {
   ADMIN = 'ADMIN',
-  USER = 'USER'
+  MANAGER = 'MANAGER',
+  EMPLOYEE = 'EMPLOYEE'
 }
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  password?: string; // Campo opcional para suporte a legado ou exibição
+  password?: string;
   role: UserRole;
-  units: string[]; // IDs of units user can access
+  units: string[];
 }
 
 export interface Unit {
@@ -55,7 +56,7 @@ export interface Product {
   currentStock: number;
   unitId: string;
   imageUrl?: string;
-  costPrice: number; // Average Weighted Cost
+  costPrice: number;
 }
 
 export enum MovementType {
@@ -72,7 +73,7 @@ export interface InventoryMovement {
   date: string;
   unitId: string;
   reason: string;
-  transactionId?: string; // Link to finance
+  transactionId?: string;
   status: TransactionStatus;
 }
 
@@ -80,7 +81,7 @@ export interface Budget {
   id: string;
   unitId: string;
   category: string;
-  month: string; // YYYY-MM
+  month: string;
   amount: number;
   revisions: { date: string; amount: number; reason: string }[];
 }
