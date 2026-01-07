@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Check, X, ShieldAlert, MessageSquare } from 'lucide-react';
+import { Check, X, ShieldAlert, MessageSquare, Paperclip } from 'lucide-react';
 import { store } from '../store';
 import { TransactionStatus } from '../types';
 
@@ -23,6 +23,13 @@ const Approvals: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
     refresh();
   };
 
+  const openAttachment = (url: string) => {
+    const newWindow = window.open();
+    if (newWindow) {
+      newWindow.document.write(`<iframe src="${url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex gap-3 text-amber-800">
@@ -43,6 +50,14 @@ const Approvals: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
                     {item.type}
                   </span>
                   <span className="text-xs text-slate-400">{new Date(item.date).toLocaleDateString()}</span>
+                  {item.attachmentUrl && (
+                    <button 
+                      onClick={() => openAttachment(item.attachmentUrl)}
+                      className="ml-2 flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 hover:bg-blue-100 transition-all"
+                    >
+                      <Paperclip size={10} /> Ver Anexo
+                    </button>
+                  )}
                 </div>
                 <h4 className="text-lg font-bold text-slate-800">{item.description}</h4>
                 <div className="flex gap-4 mt-2 text-sm text-slate-500">
