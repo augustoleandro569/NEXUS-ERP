@@ -15,7 +15,10 @@ import {
   EyeOff,
   Lock,
   User as UserIcon,
-  Loader2
+  Loader2,
+  Cloud,
+  CloudOff,
+  RefreshCw
 } from 'lucide-react';
 import { store } from './store';
 import { User, TransactionStatus, UserRole } from './types';
@@ -36,9 +39,11 @@ const App: React.FC = () => {
   const [loginPassword, setLoginPassword] = useState('admin');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [syncState, setSyncState] = useState(store.syncStatus);
 
   const refreshData = () => {
     setGlobalData({ ...store.data });
+    setSyncState(store.syncStatus);
   };
 
   useEffect(() => {
@@ -51,6 +56,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     refreshData();
+    const interval = setInterval(() => setSyncState(store.syncStatus), 1000);
+    return () => clearInterval(interval);
   }, [activeTab]);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -173,10 +180,6 @@ const App: React.FC = () => {
               </button>
             </div>
           </div>
-
-          <p className="text-center text-[10px] font-bold text-slate-300 mt-10 uppercase tracking-widest">
-            Powered by Google AI Studio
-          </p>
         </div>
       </div>
     );
@@ -268,7 +271,14 @@ const App: React.FC = () => {
             </button>
             <div>
               <h2 className="text-xl font-bold text-slate-900 capitalize tracking-tight">{activeTab}</h2>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{currentUser.units.length} Unidade(s) sob gestão</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{currentUser.units.length} Unidade(s) sob gestão</p>
+                <span className="text-slate-200">|</span>
+                <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase ${syncState === 'cloud' ? 'text-green-500' : syncState === 'syncing' ? 'text-blue-500' : 'text-slate-400'}`}>
+                  {syncState === 'cloud' ? <Cloud size={12} /> : syncState === 'syncing' ? <RefreshCw size={12} className="animate-spin" /> : <CloudOff size={12} />}
+                  {syncState === 'cloud' ? 'Nuvem' : syncState === 'syncing' ? 'Sincronizando' : 'Local'}
+                </div>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-4 text-slate-400 text-xs font-bold uppercase tracking-widest">
