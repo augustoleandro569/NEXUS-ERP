@@ -2,10 +2,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction } from "./types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getApiKey = () => {
+  try {
+    return typeof process !== 'undefined' ? process.env.API_KEY : '';
+  } catch {
+    return '';
+  }
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() || '' });
 
 export async function getFinancialForecast(transactions: Transaction[]) {
-  // Simplified summary to keep payload small
   const summary = transactions.map(t => ({
     date: t.date,
     amount: t.type === 'INCOME' ? t.amount : -t.amount,
@@ -37,7 +44,7 @@ export async function getFinancialForecast(transactions: Transaction[]) {
     }
   });
 
-  return JSON.parse(response.text);
+  return JSON.parse(response.text || '{}');
 }
 
 export async function getKPIAnalysis(kpis: any) {
@@ -46,5 +53,5 @@ export async function getKPIAnalysis(kpis: any) {
     contents: `Com base nestes KPIs financeiros de um ERP, dê uma análise estratégica curta e objetiva em 3 tópicos: ${JSON.stringify(kpis)}`,
   });
 
-  return response.text;
+  return response.text || '';
 }

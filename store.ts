@@ -2,8 +2,20 @@
 import { createClient } from '@supabase/supabase-js';
 import { User, Unit, Transaction, Product, InventoryMovement, Budget, AuditLog, UserRole, TransactionStatus, TransactionType, MovementType } from './types';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || '';
+// Função auxiliar para gerar IDs compatível com todos os ambientes
+const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+
+// Acesso seguro a variáveis de ambiente
+const getEnv = (key: string) => {
+  try {
+    return typeof process !== 'undefined' ? process.env[key] : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const SUPABASE_URL = getEnv('SUPABASE_URL') || '';
+const SUPABASE_KEY = getEnv('SUPABASE_ANON_KEY') || '';
 
 const supabase = (SUPABASE_URL && SUPABASE_KEY) ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
@@ -37,9 +49,18 @@ class ERPStore {
   };
 
   constructor() {
-    const stored = localStorage.getItem(ERPStore.STORAGE_KEY);
-    if (stored) {
-      this.data = JSON.parse(stored);
+    let storedData = null;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const stored = localStorage.getItem(ERPStore.STORAGE_KEY);
+        if (stored) storedData = JSON.parse(stored);
+      }
+    } catch (e) {
+      console.warn('Erro ao acessar localStorage:', e);
+    }
+
+    if (storedData) {
+      this.data = storedData;
     } else {
       this.data = {
         users: [INITIAL_USER],
@@ -51,7 +72,7 @@ class ERPStore {
         logs: [],
         currentUser: null
       };
-      this.save();
+      this.save(false);
     }
     this.initialSync();
   }
@@ -61,7 +82,6 @@ class ERPStore {
     
     this.syncStatus = 'syncing';
     try {
-      // Exemplo de pull: Busca o estado mais recente da nuvem para o usuário
       const { data: cloudData, error } = await supabase
         .from('nexus_states')
         .select('payload')
@@ -71,7 +91,7 @@ class ERPStore {
       if (cloudData && !error) {
         this.data = { ...this.data, ...cloudData.payload };
         this.syncStatus = 'cloud';
-        this.save(false); // Salva localmente mas não dispara novo sync
+        this.save(false);
       }
     } catch (e) {
       this.syncStatus = 'local';
@@ -79,7 +99,13 @@ class ERPStore {
   }
 
   async save(shouldSync: boolean = true) {
-    localStorage.setItem(ERPStore.STORAGE_KEY, JSON.stringify(this.data));
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(ERPStore.STORAGE_KEY, JSON.stringify(this.data));
+      }
+    } catch (e) {
+      console.warn('Erro ao salvar no localStorage:', e);
+    }
     
     if (shouldSync && supabase && this.data.currentUser) {
       this.syncStatus = 'syncing';
@@ -100,7 +126,7 @@ class ERPStore {
 
   log(userId: string, action: string, details: string) {
     this.data.logs.unshift({
-      id: crypto.randomUUID(),
+      id: generateId(),
       userId,
       action,
       details,
@@ -126,9 +152,8 @@ class ERPStore {
     this.save();
   }
 
-  // Métodos de Negócio simplificados para o exemplo de sincronização
   addUser(u: Omit<User, 'id'>) {
-    const newUser: User = { ...u, id: crypto.randomUUID() };
+    const newUser: User = { ...u, id: generateId() };
     this.data.users.push(newUser);
     this.save();
     return newUser;
@@ -149,7 +174,7 @@ class ERPStore {
   }
 
   addUnit(name: string) {
-    const newUnit: Unit = { id: crypto.randomUUID(), name, active: true };
+    const newUnit: Unit = { id: generateId(), name, active: true };
     this.data.units.push(newUnit);
     this.save();
     return newUnit;
@@ -181,7 +206,7 @@ class ERPStore {
   addTransaction(t: Omit<Transaction, 'id' | 'status'>) {
     const newTransaction: Transaction = {
       ...t,
-      id: crypto.randomUUID(),
+      id: generateId(),
       status: TransactionStatus.PENDING
     };
     this.data.transactions.unshift(newTransaction);
@@ -208,7 +233,7 @@ class ERPStore {
   }
 
   addProduct(p: Omit<Product, 'id'>) {
-    const newProduct: Product = { ...p, id: crypto.randomUUID() };
+    const newProduct: Product = { ...p, id: generateId() };
     this.data.products.push(newProduct);
     this.save();
   }
@@ -219,7 +244,7 @@ class ERPStore {
     if (m.type === MovementType.OUT && product.currentStock < m.quantity) {
       throw new Error("Saldo insuficiente em estoque.");
     }
-    const movement: InventoryMovement = { ...m, id: crypto.randomUUID(), status: TransactionStatus.APPROVED };
+    const movement: InventoryMovement = { ...m, id: generateId(), status: TransactionStatus.APPROVED };
     if (m.type === MovementType.IN) product.currentStock += m.quantity;
     if (m.type === MovementType.OUT) product.currentStock -= m.quantity;
     this.data.movements.unshift(movement);
@@ -245,7 +270,7 @@ class ERPStore {
       existing.revisions.push({ date: new Date().toISOString(), amount: existing.amount, reason: 'Revisão orçamentária' });
       existing.amount = b.amount;
     } else {
-      this.data.budgets.push({ ...b, id: crypto.randomUUID(), revisions: [] });
+      this.data.budgets.push({ ...b, id: generateId(), revisions: [] });
     }
     this.save();
   }

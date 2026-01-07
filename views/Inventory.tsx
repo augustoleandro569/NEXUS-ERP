@@ -22,7 +22,10 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
-  const [selectedUnitFilter, setSelectedUnitFilter] = useState<string>(data.currentUser?.units[0] || data.units[0]?.id || '');
+  
+  // Safe initialization
+  const initialUnit = data.currentUser?.units?.[0] || data.units?.[0]?.id || '';
+  const [selectedUnitFilter, setSelectedUnitFilter] = useState<string>(initialUnit);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [productForm, setProductForm] = useState({
@@ -31,7 +34,7 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
     minStock: 0,
     currentStock: 0,
     costPrice: 0,
-    unitId: data.units[0]?.id || '',
+    unitId: data.units?.[0]?.id || '',
     imageUrl: ''
   });
 
@@ -42,9 +45,12 @@ const Inventory: React.FC<{ data: any; refresh: () => void }> = ({ data, refresh
     linkToFinance: true
   });
 
-  const isAdminOrManager = data.currentUser.role === UserRole.ADMIN || data.currentUser.role === UserRole.MANAGER;
-  const isEmployee = data.currentUser.role === UserRole.EMPLOYEE;
-  const userUnits = data.units.filter((u: any) => data.currentUser.units.includes(u.id));
+  const currentUser = data.currentUser;
+  if (!currentUser) return null;
+
+  const isAdminOrManager = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER;
+  const isEmployee = currentUser.role === UserRole.EMPLOYEE;
+  const userUnits = data.units.filter((u: any) => (currentUser.units || []).includes(u.id));
 
   const handleAddProduct = (e: React.FormEvent) => {
     e.preventDefault();
