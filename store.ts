@@ -65,7 +65,6 @@ class LocalStore {
     if (saved) {
       try {
         this.data = JSON.parse(saved);
-        // Garante que o usuário atual seja limpo no reload para forçar login
         this.data.currentUser = null;
       } catch (e) {
         console.error("Erro ao carregar dados locais", e);
@@ -81,11 +80,30 @@ class LocalStore {
     const user = this.data.users.find(u => u.email === email && u.password === (password || 'admin123'));
     if (user) {
       this.data.currentUser = user;
-      this.log(user.id, 'LOGIN', 'Acesso ao sistema Nexus Local.');
+      this.log(user.id, 'LOGIN', 'Acesso ao sistema Nexus.');
       this.save();
       return true;
     }
     return false;
+  }
+
+  async register(name: string, email: string, password?: string) {
+    const exists = this.data.users.some(u => u.email === email);
+    if (exists) throw new Error("Este e-mail já está cadastrado.");
+
+    const newUser: User = {
+      id: Math.random().toString(36).substr(2, 9),
+      name,
+      email,
+      password: password || '123456',
+      role: UserRole.GUEST,
+      units: []
+    };
+
+    this.data.users.push(newUser);
+    this.log(newUser.id, 'REGISTER', 'Novo usuário registrado via portal público.');
+    this.save();
+    return newUser;
   }
 
   async logout() {
@@ -109,7 +127,6 @@ class LocalStore {
     this.save();
   }
 
-  // Unidades
   addUnit(name: string, cnpj: string = '') {
     const newUnit: Unit = {
       id: Math.random().toString(36).substr(2, 9),
@@ -130,9 +147,8 @@ class LocalStore {
   }
 
   deleteUnit(id: string) {
-    // Bloqueia se houver transações
     const hasTransactions = this.data.transactions.some(t => t.unitId === id);
-    if (hasTransactions) throw new Error("Não é possível excluir unidade com movimentações financeiras.");
+    if (hasTransactions) throw new Error("Não é possível excluir unidade com movimentações.");
     this.data.units = this.data.units.filter(u => u.id !== id);
     this.save();
   }
@@ -145,7 +161,6 @@ class LocalStore {
     }
   }
 
-  // Financeiro
   addTransaction(t: Omit<Transaction, 'id' | 'status'>) {
     const newTransaction: Transaction = {
       ...t,
@@ -174,7 +189,6 @@ class LocalStore {
     }
   }
 
-  // Usuários
   addUser(user: Omit<User, 'id'>) {
     const newUser: User = {
       ...user,
@@ -198,7 +212,6 @@ class LocalStore {
     this.save();
   }
 
-  // Estoque
   addProduct(p: Omit<Product, 'id'>) {
     const newProduct: Product = {
       ...p,
@@ -211,22 +224,16 @@ class LocalStore {
   addMovement(m: Omit<InventoryMovement, 'id' | 'status'>, linkToFinance: boolean = false) {
     const product = this.data.products.find(p => p.id === m.productId);
     if (!product) return;
-
     const qty = Number(m.quantity);
     const newStock = m.type === MovementType.IN ? product.currentStock + qty : product.currentStock - qty;
-    
-    if (newStock < 0) throw new Error("Estoque insuficiente para esta operação.");
-
+    if (newStock < 0) throw new Error("Estoque insuficiente.");
     product.currentStock = newStock;
-
     const movement: InventoryMovement = {
       ...m,
       id: Math.random().toString(36).substr(2, 9),
       status: TransactionStatus.APPROVED
     };
-
     this.data.movements.unshift(movement);
-
     if (linkToFinance) {
       this.addTransaction({
         type: m.type === MovementType.IN ? TransactionType.EXPENSE : TransactionType.INCOME,
@@ -242,7 +249,6 @@ class LocalStore {
     this.save();
   }
 
-  // Orçamento
   setBudget(b: Omit<Budget, 'id' | 'revisions'>) {
     const existing = this.data.budgets.find(x => x.unitId === b.unitId && x.category === b.category && x.month === b.month);
     if (existing) {

@@ -17,7 +17,7 @@ import {
   Loader2,
   Database,
   ShieldCheck,
-  Cloud
+  UserPlus
 } from 'lucide-react';
 import { store } from './store';
 import { User, TransactionStatus, UserRole } from './types';
@@ -28,44 +28,67 @@ import Reports from './views/Reports';
 import Budgeting from './views/Budgeting';
 import Approvals from './views/Approvals';
 import SettingsView from './views/Settings';
+import Welcome from './views/Welcome';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(store.data.currentUser);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('welcome');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [globalData, setGlobalData] = useState({ ...store.data });
+  const [isRegistering, setIsRegistering] = useState(false);
+  
+  // Login/Register states
   const [loginEmail, setLoginEmail] = useState('admin@nexus.com');
   const [loginPassword, setLoginPassword] = useState('admin123');
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Atualização local rápida para refletir mudanças do singleton store
     const interval = setInterval(() => {
       setGlobalData({ ...store.data });
       if (store.data.currentUser !== currentUser) {
         setCurrentUser(store.data.currentUser);
+        if (store.data.currentUser?.role === UserRole.GUEST) {
+          setActiveTab('welcome');
+        } else if (store.data.currentUser && activeTab === 'welcome') {
+          setActiveTab('dashboard');
+        }
       }
     }, 100);
     return () => clearInterval(interval);
-  }, [currentUser]);
+  }, [currentUser, activeTab]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoggingIn(true);
-    // Simula um pequeno delay de processamento para UX
+    setIsLoading(true);
     setTimeout(async () => {
       const success = await store.login(loginEmail, loginPassword);
-      if (!success) {
-        alert('Falha na autenticação. Verifique suas credenciais.');
-      }
-      setIsLoggingIn(false);
+      if (!success) alert('Credenciais inválidas.');
+      setIsLoading(false);
     }, 600);
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      await store.register(regName, regEmail, regPassword);
+      alert('Cadastro realizado! Agora faça login para continuar.');
+      setIsRegistering(false);
+    } catch (err: any) {
+      alert(err.message);
+    }
+    setIsLoading(false);
   };
 
   const handleLogout = async () => {
     await store.logout();
     setCurrentUser(null);
+    setActiveTab('welcome');
   };
 
   if (!currentUser) {
@@ -77,69 +100,73 @@ const App: React.FC = () => {
               N
             </div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Nexus ERP</h1>
-            <p className="text-slate-400 font-medium mt-2">Gestão Corporativa Estável</p>
+            <p className="text-slate-400 font-medium mt-2">
+              {isRegistering ? 'Crie sua conta corporativa' : 'Gestão Corporativa Estável'}
+            </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
+            {isRegistering && (
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Nome Completo</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                  <input 
+                    type="text" required value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:ring-2 focus:ring-blue-500 transition-all font-medium text-sm"
+                    placeholder="Seu nome"
+                  />
+                </div>
+              </div>
+            )}
+            
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">E-mail Corporativo</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">E-mail</label>
               <div className="relative">
                 <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                 <input 
-                  type="email" 
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium text-sm"
-                  placeholder="admin@nexus.com"
-                  required
+                  type="email" required
+                  value={isRegistering ? regEmail : loginEmail}
+                  onChange={(e) => isRegistering ? setRegEmail(e.target.value) : setLoginEmail(e.target.value)}
+                  className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:ring-2 focus:ring-blue-500 transition-all font-medium text-sm"
+                  placeholder="email@empresa.com"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Senha de Acesso</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Senha</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                 <input 
-                  type={showPassword ? "text" : "password"}
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full pl-12 pr-12 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium text-sm"
+                  type={showPassword ? "text" : "password"} required
+                  value={isRegistering ? regPassword : loginPassword}
+                  onChange={(e) => isRegistering ? setRegPassword(e.target.value) : setLoginPassword(e.target.value)}
+                  className="w-full pl-12 pr-12 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:ring-2 focus:ring-blue-500 transition-all font-medium text-sm"
                   placeholder="••••••••"
-                  required
                 />
-                <button 
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 transition-colors"
-                >
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300">
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
             </div>
 
-            <button 
-              type="submit"
-              disabled={isLoggingIn}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3"
-            >
-              {isLoggingIn ? <Loader2 size={20} className="animate-spin" /> : 'Acessar ERP Local'}
+            <button type="submit" disabled={isLoading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3">
+              {isLoading ? <Loader2 size={20} className="animate-spin" /> : isRegistering ? 'Criar Conta' : 'Acessar ERP'}
             </button>
           </form>
 
-          <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-            <div className="flex items-center gap-2 mb-1 justify-center">
-              <Database size={14} className="text-slate-500" />
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Local Storage Engine</p>
-            </div>
-            <p className="text-center text-[10px] text-slate-400">Seus dados permanecem seguros neste navegador.</p>
-          </div>
+          <button onClick={() => setIsRegistering(!isRegistering)} className="w-full mt-6 text-xs font-bold text-blue-600 uppercase tracking-widest hover:underline">
+            {isRegistering ? 'Já tenho conta, fazer login' : 'Não tem conta? Cadastre-se agora'}
+          </button>
         </div>
       </div>
     );
   }
 
   const menuItems = [
+    { id: 'welcome', label: 'Bem-vindo', icon: UserIcon, roles: [UserRole.GUEST] },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.MANAGER] },
     { id: 'finance', label: 'Financeiro', icon: Wallet, roles: [UserRole.ADMIN, UserRole.MANAGER] },
     { id: 'inventory', label: 'Estoque', icon: Package, roles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.EMPLOYEE] },
@@ -223,6 +250,7 @@ const App: React.FC = () => {
 
         <main className="flex-1 overflow-y-auto p-8">
           <div className="max-w-[1600px] mx-auto">
+            {activeTab === 'welcome' && <Welcome user={currentUser} />}
             {activeTab === 'dashboard' && <Dashboard data={globalData} refresh={refreshData} />}
             {activeTab === 'finance' && <Finance data={globalData} refresh={refreshData} />}
             {activeTab === 'inventory' && <Inventory data={globalData} refresh={refreshData} />}
