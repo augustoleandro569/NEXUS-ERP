@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
@@ -17,9 +16,7 @@ import {
   User as UserIcon,
   Loader2,
   Database,
-  Cloud,
-  ShieldCheck,
-  HardDrive
+  ShieldCheck
 } from 'lucide-react';
 import { store } from './store';
 import { User, TransactionStatus, UserRole } from './types';
@@ -41,25 +38,26 @@ const App: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Monitorar dados do store
   useEffect(() => {
-    const update = () => {
+    // Polling simples para manter a interface atualizada com o store local
+    const interval = setInterval(() => {
       setGlobalData({ ...store.data });
       setCurrentUser(store.data.currentUser);
-    };
-    update();
-    const interval = setInterval(update, 1000); // Polling local para sync com listeners
+    }, 500);
     return () => clearInterval(interval);
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
-    const success = await store.login(loginEmail, loginPassword);
-    if (!success) {
-      alert('Falha na autenticação Firebase. Verifique e-mail/senha ou se o usuário foi criado no Authentication do console.');
-    }
-    setIsLoggingIn(false);
+    // Simular latência de rede para feedback visual
+    setTimeout(async () => {
+      const success = await store.login(loginEmail, loginPassword);
+      if (!success) {
+        alert('E-mail ou senha incorretos. Use admin@nexus.com / admin123');
+      }
+      setIsLoggingIn(false);
+    }, 800);
   };
 
   const handleLogout = async () => {
@@ -75,13 +73,13 @@ const App: React.FC = () => {
             <div className="bg-blue-600 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 text-white shadow-xl shadow-blue-200 font-black text-3xl transform -rotate-6">
               N
             </div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Nexus Cloud</h1>
-            <p className="text-slate-400 font-medium mt-2">ERP Gerencial Conectado</p>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Nexus ERP</h1>
+            <p className="text-slate-400 font-medium mt-2">Sistema de Gestão Integrada</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">E-mail Corporativo</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">E-mail de Acesso</label>
               <div className="relative">
                 <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                 <input 
@@ -122,16 +120,16 @@ const App: React.FC = () => {
               disabled={isLoggingIn}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3"
             >
-              {isLoggingIn ? <Loader2 size={20} className="animate-spin" /> : 'Acessar Nuvem Nexus'}
+              {isLoggingIn ? <Loader2 size={20} className="animate-spin" /> : 'Entrar no Sistema'}
             </button>
           </form>
 
-          <div className="mt-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+          <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
             <div className="flex items-center gap-2 mb-1 justify-center">
-              <ShieldCheck size={14} className="text-blue-600" />
-              <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Segurança Firebase Ativa</p>
+              <Database size={14} className="text-slate-400" />
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Persistência Local Ativa</p>
             </div>
-            <p className="text-center text-[10px] text-blue-500/80">Seus dados estão protegidos e sincronizados em tempo real com o Cloud Firestore.</p>
+            <p className="text-center text-[10px] text-slate-400">Seus dados são salvos automaticamente no armazenamento do navegador.</p>
           </div>
         </div>
       </div>
@@ -156,7 +154,7 @@ const App: React.FC = () => {
         <div className="p-8 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="bg-blue-600 p-2.5 rounded-xl shadow-lg transform -rotate-6">
-              <Cloud size={20} />
+              <Database size={20} />
             </div>
             <span className="text-xl font-bold tracking-tight">Nexus ERP</span>
           </div>
@@ -206,17 +204,17 @@ const App: React.FC = () => {
             <div>
               <h2 className="text-xl font-bold text-slate-900 capitalize tracking-tight">{activeTab}</h2>
               <div className="flex items-center gap-2">
-                <p className="text-xs text-blue-600 font-bold uppercase tracking-widest">Sincronizado via Firebase</p>
-                <Cloud size={12} className="text-blue-500" />
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Modo Local Offline</p>
+                <ShieldCheck size={12} className="text-slate-400" />
               </div>
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-4">
             <div className="text-right">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Status Cloud</p>
-              <p className="text-[10px] text-green-500 font-bold">Conexão Estável</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Armazenamento</p>
+              <p className="text-[10px] text-blue-500 font-bold">Navegador Local</p>
             </div>
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
           </div>
         </header>
 
