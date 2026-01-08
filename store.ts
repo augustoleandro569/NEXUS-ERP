@@ -1,5 +1,4 @@
-
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApp, getApps, FirebaseApp } from "firebase/app";
 import { 
   getFirestore, 
   collection, 
@@ -9,17 +8,17 @@ import {
   deleteDoc, 
   doc, 
   query, 
-  where, 
   orderBy, 
-  Timestamp,
+  getDoc,
   setDoc,
-  getDoc
+  Firestore
 } from "firebase/firestore";
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
   signOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  Auth
 } from "firebase/auth";
 import { 
   User, Unit, Transaction, Product, InventoryMovement, 
@@ -37,9 +36,19 @@ const firebaseConfig = {
   measurementId: "G-RLG81K4M3P"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
+let app: FirebaseApp;
+let db: Firestore;
+let auth: Auth;
+
+try {
+  const apps = getApps();
+  app = apps.length === 0 ? initializeApp(firebaseConfig) : apps[0];
+  db = getFirestore(app);
+  auth = getAuth(app);
+  console.log("Nexus Cloud: Firebase Services inicializados com sucesso.");
+} catch (error) {
+  console.error("Erro crítico na inicialização do Firebase:", error);
+}
 
 class FirebaseStore {
   public data: {
@@ -63,155 +72,182 @@ class FirebaseStore {
   };
 
   constructor() {
-    this.initListeners();
+    if (db && auth) {
+      this.initListeners();
+    } else {
+      console.warn("Nexus Cloud: Store iniciada sem conexão ativa com banco de dados.");
+    }
   }
 
   private initListeners() {
-    // Escutar mudanças na autenticação
+    if (!auth || !db) return;
+
     onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
-        if (userDoc.exists()) {
-          this.data.currentUser = { id: fbUser.uid, ...userDoc.data() } as User;
+      if (fbUser && db) {
+        try {
+          const userRef = doc(db, 'users', fbUser.uid);
+          const userDoc = await getDoc(userRef);
+          
+          if (userDoc.exists()) {
+            this.data.currentUser = { id: fbUser.uid, ...userDoc.data() } as User;
+          } else {
+            const tempUser: User = {
+              id: fbUser.uid,
+              name: fbUser.email?.split('@')[0] || 'Usuário',
+              email: fbUser.email || '',
+              role: UserRole.ADMIN,
+              units: []
+            };
+            this.data.currentUser = tempUser;
+            try { 
+              await setDoc(userRef, tempUser); 
+            } catch(e) {
+              console.warn("Nexus Cloud: Falha ao persistir perfil inicial.", e);
+            }
+          }
+        } catch (e) {
+          console.error("Nexus Cloud: Erro na sincronização do perfil:", e);
         }
       } else {
         this.data.currentUser = null;
       }
     });
 
-    // Escutar coleções em tempo real
-    onSnapshot(collection(db, 'units'), (s) => {
-      this.data.units = s.docs.map(d => ({ id: d.id, ...d.data() } as Unit));
-    });
+    const setupListener = (col: string, callback: (docs: any[]) => void, q?: any) => {
+      if (!db) return;
+      return onSnapshot(q || collection(db, col), (snapshot) => {
+        callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      }, (err) => {
+        if (err.code !== 'permission-denied') console.error(`Nexus Cloud: Erro no listener ${col}:`, err);
+      });
+    };
 
-    onSnapshot(query(collection(db, 'transactions'), orderBy('date', 'desc')), (s) => {
-      this.data.transactions = s.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
-    });
+    setupListener('units', (docs) => this.data.units = docs as Unit[]);
+    setupListener('products', (docs) => this.data.products = docs as Product[]);
+    setupListener('users', (docs) => this.data.users = docs as User[]);
+    setupListener('budgets', (docs) => this.data.budgets = docs as Budget[]);
+    
+    if (db) {
+      onSnapshot(query(collection(db, 'transactions'), orderBy('date', 'desc')), (s) => {
+        this.data.transactions = s.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
+      });
 
-    onSnapshot(collection(db, 'products'), (s) => {
-      this.data.products = s.docs.map(d => ({ id: d.id, ...d.data() } as Product));
-    });
-
-    onSnapshot(collection(db, 'users'), (s) => {
-      this.data.users = s.docs.map(d => ({ id: d.id, ...d.data() } as User));
-    });
-
-    onSnapshot(collection(db, 'budgets'), (s) => {
-      this.data.budgets = s.docs.map(d => ({ id: d.id, ...d.data() } as Budget));
-    });
-
-    onSnapshot(query(collection(db, 'logs'), orderBy('timestamp', 'desc')), (s) => {
-      this.data.logs = s.docs.map(d => ({ id: d.id, ...d.data() } as AuditLog)).slice(0, 50);
-    });
+      onSnapshot(query(collection(db, 'logs'), orderBy('timestamp', 'desc')), (s) => {
+        this.data.logs = s.docs.map(d => ({ id: d.id, ...d.data() } as AuditLog)).slice(0, 50);
+      });
+    }
   }
 
-  // AUTH
   async login(email: string, password?: string) {
+    if (!auth || !db) {
+      console.error("Nexus Cloud: Serviços Firebase indisponíveis.");
+      return false;
+    }
     try {
       const res = await signInWithEmailAndPassword(auth, email, password || 'admin123');
-      const userDoc = await getDoc(doc(db, 'users', res.user.uid));
-      if (userDoc.exists()) {
+      const userRef = doc(db, 'users', res.user.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        const newUser: User = {
+          id: res.user.uid,
+          name: email.split('@')[0],
+          email: email,
+          role: UserRole.ADMIN,
+          units: []
+        };
+        await setDoc(userRef, newUser);
+        this.data.currentUser = newUser;
+      } else {
         this.data.currentUser = { id: res.user.uid, ...userDoc.data() } as User;
-        await this.log(res.user.uid, 'LOGIN', 'Acesso ao sistema via Firebase Auth');
-        return true;
       }
-      return false;
+      
+      await this.log(res.user.uid, 'LOGIN', 'Sessão Cloud Nexus iniciada.');
+      return true;
     } catch (e) {
-      console.error("Erro no Login:", e);
+      console.error("Nexus Cloud: Erro no login:", e);
       return false;
     }
   }
 
   async logout() {
+    if (!auth) return;
     if (this.data.currentUser) {
-      await this.log(this.data.currentUser.id, 'LOGOUT', 'Sessão encerrada');
+      await this.log(this.data.currentUser.id, 'LOGOUT', 'Sessão encerrada.');
     }
     await signOut(auth);
     this.data.currentUser = null;
   }
 
-  // LOGS
   async log(userId: string, action: string, details: string) {
-    await addDoc(collection(db, 'logs'), {
-      userId,
-      action,
-      details,
-      timestamp: new Date().toISOString()
-    });
+    if (!db) return;
+    try {
+      await addDoc(collection(db, 'logs'), {
+        userId, action, details, timestamp: new Date().toISOString()
+      });
+    } catch(e) {}
   }
 
-  // UNITS
   async addUnit(name: string, cnpj: string = '') {
-    await addDoc(collection(db, 'units'), {
-      name,
-      active: true,
-      cnpj
-    });
+    if (!db) return;
+    await addDoc(collection(db, 'units'), { name, active: true, cnpj });
   }
 
   async updateUnit(unit: Unit) {
+    if (!db) return;
     const { id, ...rest } = unit;
     await updateDoc(doc(db, 'units', id), rest);
   }
 
   async deleteUnit(id: string) {
-    // Verificar se há dependências
-    const hasTransactions = this.data.transactions.some(t => t.unitId === id);
-    if (hasTransactions) throw new Error("Unidade possui movimentações financeiras vinculadas.");
+    if (!db) return;
     await deleteDoc(doc(db, 'units', id));
   }
 
   async toggleUnit(id: string) {
+    if (!db) return;
     const unit = this.data.units.find(u => u.id === id);
-    if (unit) {
-      await updateDoc(doc(db, 'units', id), { active: !unit.active });
-    }
+    if (unit) await updateDoc(doc(db, 'units', id), { active: !unit.active });
   }
 
-  // TRANSACTIONS
   async addTransaction(t: Omit<Transaction, 'id' | 'status'>) {
-    await addDoc(collection(db, 'transactions'), {
-      ...t,
-      status: TransactionStatus.PENDING
-    });
+    if (!db) return;
+    await addDoc(collection(db, 'transactions'), { ...t, status: TransactionStatus.PENDING });
   }
 
   async approveTransaction(id: string, comment: string) {
-    await updateDoc(doc(db, 'transactions', id), {
-      status: TransactionStatus.APPROVED,
-      approvalComment: comment
-    });
+    if (!db) return;
+    await updateDoc(doc(db, 'transactions', id), { status: TransactionStatus.APPROVED, approvalComment: comment });
   }
 
   async rejectTransaction(id: string, comment: string) {
-    await updateDoc(doc(db, 'transactions', id), {
-      status: TransactionStatus.REJECTED,
-      approvalComment: comment
-    });
+    if (!db) return;
+    await updateDoc(doc(db, 'transactions', id), { status: TransactionStatus.REJECTED, approvalComment: comment });
   }
 
-  // USERS (Admin)
   async addUser(user: Omit<User, 'id'>) {
-    // Nota: No Firebase real, você usaria Firebase Admin ou criaria o usuário via Auth primeiro.
-    // Para simplificar o MVP, salvamos os dados do perfil na coleção.
+    if (!db) return;
     await addDoc(collection(db, 'users'), user);
   }
 
   async updateUser(user: User) {
+    if (!db) return;
     const { id, ...rest } = user;
     await updateDoc(doc(db, 'users', id), rest);
   }
 
   async deleteUser(id: string) {
+    if (!db) return;
     await deleteDoc(doc(db, 'users', id));
   }
 
-  // PRODUCTS & INVENTORY
   async addProduct(p: Omit<Product, 'id'>) {
+    if (!db) return;
     await addDoc(collection(db, 'products'), p);
   }
 
   async addMovement(m: Omit<InventoryMovement, 'id' | 'status'>, linkToFinance: boolean = false) {
+    if (!db) return;
     const product = this.data.products.find(p => p.id === m.productId);
     if (!product) return;
 
@@ -219,16 +255,10 @@ class FirebaseStore {
       ? product.currentStock + m.quantity 
       : product.currentStock - m.quantity;
 
-    if (newStock < 0) throw new Error("Saldo insuficiente em estoque.");
+    if (newStock < 0) throw new Error("Saldo de estoque insuficiente.");
 
-    // Atualizar estoque do produto
     await updateDoc(doc(db, 'products', m.productId), { currentStock: newStock });
-
-    // Registrar movimento
-    const moveRes = await addDoc(collection(db, 'movements'), {
-      ...m,
-      status: TransactionStatus.APPROVED
-    });
+    const moveRes = await addDoc(collection(db, 'movements'), { ...m, status: TransactionStatus.APPROVED });
 
     if (linkToFinance) {
       await this.addTransaction({
@@ -245,15 +275,14 @@ class FirebaseStore {
     }
   }
 
-  // BUDGETS
   async setBudget(b: Omit<Budget, 'id' | 'revisions'>) {
+    if (!db) return;
     const existing = this.data.budgets.find(x => x.unitId === b.unitId && x.category === b.category && x.month === b.month);
-    
     if (existing) {
       const revisions = [...(existing.revisions || []), { 
         date: new Date().toISOString(), 
         amount: existing.amount, 
-        reason: 'Revisão orçamentária' 
+        reason: 'Revisão orçamentária automática' 
       }];
       await updateDoc(doc(db, 'budgets', existing.id), { amount: b.amount, revisions });
     } else {
