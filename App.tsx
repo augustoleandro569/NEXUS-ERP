@@ -16,7 +16,8 @@ import {
   User as UserIcon,
   Loader2,
   Database,
-  ShieldCheck
+  ShieldCheck,
+  Cloud
 } from 'lucide-react';
 import { store } from './store';
 import { User, TransactionStatus, UserRole } from './types';
@@ -29,35 +30,37 @@ import Approvals from './views/Approvals';
 import SettingsView from './views/Settings';
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(store.data.currentUser);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [globalData, setGlobalData] = useState(store.data);
+  const [globalData, setGlobalData] = useState({ ...store.data });
   const [loginEmail, setLoginEmail] = useState('admin@nexus.com');
   const [loginPassword, setLoginPassword] = useState('admin123');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   useEffect(() => {
-    // Polling simples para manter a interface atualizada com o store local
+    // Atualização local rápida para refletir mudanças do singleton store
     const interval = setInterval(() => {
       setGlobalData({ ...store.data });
-      setCurrentUser(store.data.currentUser);
-    }, 500);
+      if (store.data.currentUser !== currentUser) {
+        setCurrentUser(store.data.currentUser);
+      }
+    }, 100);
     return () => clearInterval(interval);
-  }, []);
+  }, [currentUser]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
-    // Simular latência de rede para feedback visual
+    // Simula um pequeno delay de processamento para UX
     setTimeout(async () => {
       const success = await store.login(loginEmail, loginPassword);
       if (!success) {
-        alert('E-mail ou senha incorretos. Use admin@nexus.com / admin123');
+        alert('Falha na autenticação. Verifique suas credenciais.');
       }
       setIsLoggingIn(false);
-    }, 800);
+    }, 600);
   };
 
   const handleLogout = async () => {
@@ -74,19 +77,19 @@ const App: React.FC = () => {
               N
             </div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Nexus ERP</h1>
-            <p className="text-slate-400 font-medium mt-2">Sistema de Gestão Integrada</p>
+            <p className="text-slate-400 font-medium mt-2">Gestão Corporativa Estável</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">E-mail de Acesso</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">E-mail Corporativo</label>
               <div className="relative">
                 <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                 <input 
                   type="email" 
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                  className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium text-sm"
                   placeholder="admin@nexus.com"
                   required
                 />
@@ -94,14 +97,14 @@ const App: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Senha</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Senha de Acesso</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                 <input 
                   type={showPassword ? "text" : "password"}
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full pl-12 pr-12 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                  className="w-full pl-12 pr-12 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium text-sm"
                   placeholder="••••••••"
                   required
                 />
@@ -120,16 +123,16 @@ const App: React.FC = () => {
               disabled={isLoggingIn}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3"
             >
-              {isLoggingIn ? <Loader2 size={20} className="animate-spin" /> : 'Entrar no Sistema'}
+              {isLoggingIn ? <Loader2 size={20} className="animate-spin" /> : 'Acessar ERP Local'}
             </button>
           </form>
 
           <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
             <div className="flex items-center gap-2 mb-1 justify-center">
-              <Database size={14} className="text-slate-400" />
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Persistência Local Ativa</p>
+              <Database size={14} className="text-slate-500" />
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Local Storage Engine</p>
             </div>
-            <p className="text-center text-[10px] text-slate-400">Seus dados são salvos automaticamente no armazenamento do navegador.</p>
+            <p className="text-center text-[10px] text-slate-400">Seus dados permanecem seguros neste navegador.</p>
           </div>
         </div>
       </div>
@@ -154,7 +157,7 @@ const App: React.FC = () => {
         <div className="p-8 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="bg-blue-600 p-2.5 rounded-xl shadow-lg transform -rotate-6">
-              <Database size={20} />
+              <ShieldCheck size={20} />
             </div>
             <span className="text-xl font-bold tracking-tight">Nexus ERP</span>
           </div>
@@ -204,17 +207,17 @@ const App: React.FC = () => {
             <div>
               <h2 className="text-xl font-bold text-slate-900 capitalize tracking-tight">{activeTab}</h2>
               <div className="flex items-center gap-2">
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Modo Local Offline</p>
-                <ShieldCheck size={12} className="text-slate-400" />
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Local-First Architecture</p>
+                <Database size={12} className="text-blue-500" />
               </div>
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-4">
             <div className="text-right">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Armazenamento</p>
-              <p className="text-[10px] text-blue-500 font-bold">Navegador Local</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Status Interno</p>
+              <p className="text-[10px] text-green-500 font-bold">Consistente</p>
             </div>
-            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
           </div>
         </header>
 

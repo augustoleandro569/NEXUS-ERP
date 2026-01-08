@@ -2,6 +2,7 @@
   "name": "Nexus ERP Gerencial",
   "description": "Sistema ERP completo com gestão financeira, estoque, DRE, KPIs avançados e previsão por IA.",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "geolocation"
   ]
 }
